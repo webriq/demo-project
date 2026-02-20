@@ -9,11 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export default function LoginPage() {
   const router = useRouter()
-  const { user, isLoading, login } = useAuth()
+  const { user, isLoading, login, signup } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const [message, setMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSignUp, setIsSignUp] = useState(false)
 
   useEffect(() => {
     if (!isLoading && user) {
@@ -24,14 +26,21 @@ export default function LoginPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError("")
+    setMessage("")
     setIsSubmitting(true)
 
-    const result = await login(email, password)
+    const result = isSignUp
+      ? await signup(email, password)
+      : await login(email, password)
 
     if (result.success) {
-      router.push("/todos")
+      if (isSignUp) {
+        setMessage("Check your email to confirm your account.")
+      } else {
+        router.push("/todos")
+      }
     } else {
-      setError(result.error || "Login failed")
+      setError(result.error || "Authentication failed")
     }
 
     setIsSubmitting(false)
@@ -49,9 +58,13 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/50 p-4 sm:p-6 lg:p-8">
       <Card className="w-full max-w-sm sm:max-w-md">
         <CardHeader className="space-y-1 px-4 sm:px-6">
-          <CardTitle className="text-xl sm:text-2xl font-bold">Sign in</CardTitle>
+          <CardTitle className="text-xl sm:text-2xl font-bold">
+            {isSignUp ? "Create account" : "Sign in"}
+          </CardTitle>
           <CardDescription>
-            Enter your credentials to access your todos
+            {isSignUp
+              ? "Enter your email to create an account"
+              : "Enter your credentials to access your todos"}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-4 sm:px-6">
@@ -61,6 +74,11 @@ export default function LoginPage() {
                 {error}
               </div>
             )}
+            {message && (
+              <div className="p-3 text-sm text-green-700 bg-green-100 rounded-md">
+                {message}
+              </div>
+            )}
             <div className="space-y-2">
               <label htmlFor="email" className="text-sm font-medium">
                 Email
@@ -68,7 +86,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="user@example.com"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -86,14 +104,28 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                minLength={6}
                 className="h-12 sm:h-10 text-base sm:text-sm"
               />
             </div>
             <Button type="submit" className="w-full h-12 sm:h-10 text-base sm:text-sm" disabled={isSubmitting}>
-              {isSubmitting ? "Signing in..." : "Sign in"}
+              {isSubmitting
+                ? (isSignUp ? "Creating account..." : "Signing in...")
+                : (isSignUp ? "Create account" : "Sign in")}
             </Button>
-            <p className="text-xs text-muted-foreground text-center">
-              Demo credentials: user@example.com / password123
+            <p className="text-sm text-muted-foreground text-center">
+              {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(!isSignUp)
+                  setError("")
+                  setMessage("")
+                }}
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                {isSignUp ? "Sign in" : "Sign up"}
+              </button>
             </p>
           </form>
         </CardContent>

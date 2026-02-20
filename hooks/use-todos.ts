@@ -1,62 +1,84 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { storage } from "@/lib/storage"
+import { useState, useEffect, useCallback } from "react"
+import { supabase } from "@/lib/supabase"
 import { Todo } from "@/types"
-
-const TODOS_STORAGE_KEY = "todo-app-todos"
+import { useAuth } from "@/hooks/use-auth"
 
 export function useTodos() {
+  const { user } = useAuth()
   const [todos, setTodos] = useState<Todo[]>([])
   const [isLoaded, setIsLoaded] = useState(false)
 
-  useEffect(() => {
-    const storedTodos = storage.get<Todo[]>(TODOS_STORAGE_KEY, [])
-    setTodos(storedTodos)
+  const fetchTodos = useCallback(async () => {
+    if (!user) return
+    const { data, error } = await supabase
+      .from("todos")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+
+    if (!error && data) {
+      setTodos(data)
+    }
     setIsLoaded(true)
-  }, [])
+  }, [user])
 
   useEffect(() => {
-    if (isLoaded) {
-      storage.set(TODOS_STORAGE_KEY, todos)
-    }
-  }, [todos, isLoaded])
+    fetchTodos()
+  }, [fetchTodos])
 
-  const addTodo = (text: string) => {
-    if (!text.trim()) return
-    const newTodo: Todo = {
-      id: crypto.randomUUID(),
-      text: text.trim(),
-      completed: false,
-      createdAt: Date.now(),
+  const addTodo = async (text: string) => {
+    if (!text.trim() || !user) return
+    const { data, error } = await supabase
+      .from("todos")
+      .insert({ text: text.trim(), user_id: user.id })
+      .select()
+      .single()
+
+    if (!error && data) {
+      setTodos((prev) => [data, ...prev])
     }
-    setTodos((prev) => [newTodo, ...prev])
   }
 
-  const deleteTodo = (id: string) => {
-    setTodos((prev) => prev.filter((todo) => todo.id !== id))
+  const deleteTodo = async (id: string) => {
+    const { error } = await supabase.from("todos").delete().eq("id", id)
+    if (!error) {
+      setTodos((prev) => prev.filter((todo) => todo.id !== id))
+    }
   }
 
-  const toggleTodo = (id: string) => {
-    setTodos((prev) =>
-      prev.map((todo) =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
+  const toggleTodo = async (id: string) => {
+    const todo = todos.find((t) => t.id === id)
+    if (!todo) return
+    const { error } = await supabase
+      .from("todos")
+      .update({ completed: !todo.completed })
+      .eq("id", id)
+
+    if (!error) {
+      setTodos((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
       )
-    )
+    }
   }
 
-  const editTodo = (id: string, newText: string) => {
+  const editTodo = async (id: string, newText: string) => {
     const trimmedText = newText.trim()
     if (!trimmedText) {
-      // Delete todo if text is empty
-      deleteTodo(id)
+      await deleteTodo(id)
       return
     }
-    setTodos((prev) =>
-      prev.map((todo) =>
-        todo.id === id ? { ...todo, text: trimmedText } : todo
+    const { error } = await supabase
+      .from("todos")
+      .update({ text: trimmedText })
+      .eq("id", id)
+
+    if (!error) {
+      setTodos((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, text: trimmedText } : t))
       )
-    )
+    }
   }
 
   return {

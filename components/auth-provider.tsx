@@ -1,17 +1,14 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react"
-import { storage } from "@/lib/storage"
+import { supabase } from "@/lib/supabase"
 import { User } from "@/types"
-
-const DUMMY_EMAIL = "user@example.com"
-const DUMMY_PASSWORD = "password123"
-const AUTH_STORAGE_KEY = "todo-app-auth"
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
 }
 
@@ -22,28 +19,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const storedUser = storage.get<User | null>(AUTH_STORAGE_KEY, null)
-    setUser(storedUser)
-    setIsLoading(false)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({ id: session.user.id, email: session.user.email! })
+      }
+      setIsLoading(false)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({ id: session.user.id, email: session.user.email! })
+      } else {
+        setUser(null)
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
-    if (email === DUMMY_EMAIL && password === DUMMY_PASSWORD) {
-      const newUser: User = { email }
-      setUser(newUser)
-      storage.set(AUTH_STORAGE_KEY, newUser)
-      return { success: true }
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      return { success: false, error: error.message }
     }
-    return { success: false, error: "Invalid email or password" }
+    return { success: true }
   }
 
-  const logout = () => {
+  const signup = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    const { error } = await supabase.auth.signUp({ email, password })
+    if (error) {
+      return { success: false, error: error.message }
+    }
+    return { success: true }
+  }
+
+  const logout = async () => {
+    await supabase.auth.signOut()
     setUser(null)
-    storage.remove(AUTH_STORAGE_KEY)
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   )

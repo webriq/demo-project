@@ -1,10 +1,12 @@
 export interface Todo {
   id: string;
+  user_id: string;
   text: string;
   completed: boolean;
-  createdAt: number;
+  created_at: string;
 }
 
 export interface User {
+  id: string;
   email: string;
 }
